@@ -1,3 +1,5 @@
+import copy
+
 import SimpleITK as sitk
 import numpy as np
 import scipy
@@ -42,11 +44,32 @@ def return_physical_location(dose_file, limit=0.9, camera_dimensions=(3, 5, 3)):
         gradient_np = np.abs(np.gradient(dose_cube, 2))
         super_imposed_gradient_np = np.sum(gradient_np, axis=0)
         # We want to convolve across three axis to make sure we are not near a gradient edge
-        for i, k in enumerate(camera_dimensions):
-            voxels_needed = round_up_to_odd(k/voxel_size[i])
-            super_imposed_gradient_np = scipy.ndimage.convolve1d(super_imposed_gradient_np,
-                                                                 np.array([1/voxels_needed
-                                                                           for _ in range(voxels_needed)]), axis=i)
+        v1 = round_up_to_odd(camera_dimensions[0] / voxel_size[0])
+        k1 = np.array([1 / v1 for _ in range(v1)])
+        v2 = round_up_to_odd(camera_dimensions[1] / voxel_size[1])
+        k2 = np.array([1 / v1 for _ in range(v2)])
+        v3 = round_up_to_odd(camera_dimensions[2] / voxel_size[2])
+        k3 = np.array([1 / v1 for _ in range(v3)])
+        for i in np.arange(super_imposed_gradient_np.shape[1]):
+            for j in np.arange(super_imposed_gradient_np.shape[2]):
+                oneline = super_imposed_gradient_np[:, i, j]
+                super_imposed_gradient_np[:, i, j] = np.convolve(oneline, k1, mode='same')
+        for i in np.arange(super_imposed_gradient_np.shape[0]):
+            for j in np.arange(super_imposed_gradient_np.shape[2]):
+                oneline = super_imposed_gradient_np[i, :, j]
+                super_imposed_gradient_np[i, :, j] = np.convolve(oneline, k2, mode='same')
+        for i in np.arange(super_imposed_gradient_np.shape[0]):
+            for j in np.arange(super_imposed_gradient_np.shape[1]):
+                oneline = super_imposed_gradient_np[i, j, :]
+                super_imposed_gradient_np[i, j, :] = np.convolve(oneline, k3, mode='same')
+        """
+        This would be better...but can't translate it over into c#, so shifting to the code above
+        """
+        # for i, k in enumerate(camera_dimensions):
+        #     voxels_needed = round_up_to_odd(k / voxel_size[i])
+        #     conv_array = np.array([1/voxels_needed for _ in range(voxels_needed)])
+        #     super_imposed_gradient_np = scipy.ndimage.convolve1d(super_imposed_gradient_np,
+        #                                                          conv_array, axis=i)
         min_gradient = np.min(super_imposed_gradient_np)
         min_location = np.where(super_imposed_gradient_np <= min_gradient*1.1)
         min_z = int(z_start + min_location[0][0])
