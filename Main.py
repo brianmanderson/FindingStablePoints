@@ -64,7 +64,7 @@ def return_physical_location(dose_file, limit=0.9, camera_dimensions=(3, 5, 3)):
 
 def run():
     dose_file = r'dose.nii.gz'
-    return_physical_location(dose_file, limit=0.85)
+    return_physical_location(dose_file, limit=0.85, camera_dimensions=(5, 5, 5))
 
 
 if __name__ == '__main__':
