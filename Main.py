@@ -42,7 +42,7 @@ def return_physical_location(dose_file, limit=0.9, camera_dimensions=(3, 5, 3)):
         c_start, r_start, z_start, _, _, _ = bounding_box
         c_stop, r_stop, z_stop = c_start + bounding_box[3], r_start + bounding_box[4], z_start + bounding_box[5]
         dose_cube = dose_np[z_start:z_stop, r_start:r_stop, c_start:c_stop]
-        gradient_np = np.abs(np.gradient(dose_cube, 2))
+        gradient_np = np.abs(np.gradient(dose_cube, edge_order=2))
         super_imposed_gradient_np = np.sum(gradient_np, axis=0)
         # We want to convolve across three axis to make sure we are not near a gradient edge
         out_kernel = np.ones(kernel_needed)
