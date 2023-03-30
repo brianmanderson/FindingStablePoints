@@ -18,6 +18,7 @@ def return_physical_location(dose_file, limit=0.9, camera_dimensions=(3, 5, 3)):
     reader.ReadImageInformation()
     dose_handle = reader.Execute()
     voxel_size = dose_handle.GetSpacing()
+    kernel_needed = [round_up_to_odd(camera_dimensions[_] / voxel_size[_]) for _ in range(3)]
     dose_np = sitk.GetArrayFromImage(dose_handle)
     max_dose = np.max(dose_np)
     Connected_Component_Filter = sitk.ConnectedComponentImageFilter()
@@ -44,37 +45,19 @@ def return_physical_location(dose_file, limit=0.9, camera_dimensions=(3, 5, 3)):
         gradient_np = np.abs(np.gradient(dose_cube, 2))
         super_imposed_gradient_np = np.sum(gradient_np, axis=0)
         # We want to convolve across three axis to make sure we are not near a gradient edge
-        v1 = round_up_to_odd(camera_dimensions[0] / voxel_size[0])
-        k1 = np.array([1 / v1 for _ in range(v1)])
-        v2 = round_up_to_odd(camera_dimensions[1] / voxel_size[1])
-        k2 = np.array([1 / v1 for _ in range(v2)])
-        v3 = round_up_to_odd(camera_dimensions[2] / voxel_size[2])
-        k3 = np.array([1 / v1 for _ in range(v3)])
-        for i in np.arange(super_imposed_gradient_np.shape[1]):
-            for j in np.arange(super_imposed_gradient_np.shape[2]):
-                oneline = super_imposed_gradient_np[:, i, j]
-                super_imposed_gradient_np[:, i, j] = np.convolve(oneline, k1, mode='same')
-        for i in np.arange(super_imposed_gradient_np.shape[0]):
-            for j in np.arange(super_imposed_gradient_np.shape[2]):
-                oneline = super_imposed_gradient_np[i, :, j]
-                super_imposed_gradient_np[i, :, j] = np.convolve(oneline, k2, mode='same')
-        for i in np.arange(super_imposed_gradient_np.shape[0]):
-            for j in np.arange(super_imposed_gradient_np.shape[1]):
-                oneline = super_imposed_gradient_np[i, j, :]
-                super_imposed_gradient_np[i, j, :] = np.convolve(oneline, k3, mode='same')
-        """
-        This would be better...but can't translate it over into c#, so shifting to the code above
-        """
-        # for i, k in enumerate(camera_dimensions):
-        #     voxels_needed = round_up_to_odd(k / voxel_size[i])
-        #     conv_array = np.array([1/voxels_needed for _ in range(voxels_needed)])
-        #     super_imposed_gradient_np = scipy.ndimage.convolve1d(super_imposed_gradient_np,
-        #                                                          conv_array, axis=i)
-        min_gradient = np.min(super_imposed_gradient_np)
-        min_location = np.where(super_imposed_gradient_np <= min_gradient*1.1)
-        min_z = int(z_start + min_location[0][0])
-        min_row = int(r_start + min_location[1][0])
-        min_col = int(c_start + min_location[2][0])
+        out_kernel = np.ones(kernel_needed)
+        out_kernel /= np.sum(out_kernel)
+        out_kernel_handle = sitk.GetImageFromArray(out_kernel)
+        convolved_handle = sitk.Convolution(sitk.GetImageFromArray(super_imposed_gradient_np), out_kernel_handle)
+        output_np = sitk.GetArrayFromImage(convolved_handle)
+        min_gradient = np.min(output_np)
+        min_location = np.where(output_np <= min_gradient*1.1)
+        z_locations = min_location[0]
+        row_locations = min_location[1]
+        col_locations = min_location[2]
+        min_z = int(z_start + z_locations[len(z_locations)//2])
+        min_row = int(r_start + row_locations[len(row_locations)//2])
+        min_col = int(c_start + col_locations[len(col_locations)//2])
         physical_location = dose_handle.TransformContinuousIndexToPhysicalPoint((min_col, min_row, min_z))
         print(f"Identified position for one site: {physical_location}")
 
